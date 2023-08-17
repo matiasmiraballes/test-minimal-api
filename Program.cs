@@ -15,6 +15,7 @@ var client = new MongoClient(settings);
 var dabatase = client.GetDatabase("MyNotes");
 var metricsCollection = dabatase.GetCollection<Metric>("metrics");
 
+app.Urls.Add("http://0.0.0.0:8080");
 
 app.MapGet("/metrics", () =>
 {
