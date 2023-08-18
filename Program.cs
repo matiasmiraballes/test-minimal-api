@@ -3,6 +3,20 @@ using MongoDB.Bson.Serialization.Attributes;
 using MongoDB.Driver;
 
 var builder = WebApplication.CreateBuilder(args);
+
+var  MyAllowSpecificOrigins = "_myAllowSpecificOrigins";
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy(MyAllowSpecificOrigins,
+        policy =>
+        {
+            policy.WithOrigins("http://localhost:4200",
+                                "https://https://mynotes-mm.netlify.app/")
+                                .AllowAnyHeader()
+                                .AllowAnyMethod();
+        });
+});
+
 var app = builder.Build();
 
 
@@ -17,6 +31,11 @@ var metricsCollection = dabatase.GetCollection<Metric>("metrics");
 
 app.Urls.Add("http://0.0.0.0:8080");
 
+app.MapGet("/", () =>
+{
+    return "Hello";
+});
+
 app.MapGet("/metrics", () =>
 {
     List<Metric> allMetrics = metricsCollection.Find(_ => true).ToList();
@@ -29,7 +48,36 @@ app.MapGet("/metrics/unique", () =>
     return Results.Ok(count);
 });
 
-app.MapGet("/metrics/{id:length(24)}", (string id) => {
+app.MapGet("/metrics/by-day", () =>
+{
+    var aggregation = metricsCollection.Aggregate()
+        .Group(entry => entry.CreatedAt.Date, group => new
+        {
+            Date = group.Key,
+            Count = group.Count()
+        });
+
+    var result = aggregation.ToList();
+
+    return Results.Ok(result);
+});
+
+app.MapGet("/metrics/unique-by-day", () =>
+{
+    var aggregation = metricsCollection.Aggregate()
+        .Group(entry => entry.CreatedAt.Date, group => new
+        {
+            Date = group.Key,
+            UniqueUsers = group.Select(g => g.Username).Distinct().Count()
+        });
+
+    var result = aggregation.ToList();
+
+    return Results.Ok(result);
+});
+
+app.MapGet("/metrics/{id:length(24)}", (string id) =>
+{
     var metric = metricsCollection.Find(m => m.Id == id).SingleOrDefault();
     if (metric is null)
         return Results.NotFound();
@@ -49,6 +97,8 @@ app.MapPost("/metrics", ([FromBody] MetricBody body) =>
     metricsCollection.InsertOne(metric);
     return Results.Created("/metrics/someid", metric);
 });
+
+app.UseCors(MyAllowSpecificOrigins);
 
 app.Run();
 
